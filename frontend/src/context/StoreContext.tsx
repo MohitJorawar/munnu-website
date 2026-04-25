@@ -1,0 +1,322 @@
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { Product, CartItem, Order } from "@/types/store";
+import { defaultProducts, DEFAULT_CATEGORIES } from "@/data/products";
+
+interface StoreContextType {
+  products: Product[];
+  cart: CartItem[];
+  favorites: string[];
+  orders: Order[];
+  categories: string[];
+  user: { name: string; email: string } | null;
+  addProduct: (product: Omit<Product, "id">) => Promise<boolean>;
+  updateProduct: (product: Product) => Promise<boolean>;
+  deleteProduct: (id: string) => Promise<boolean>;
+  addToCart: (product: Product) => void;
+  removeFromCart: (productId: string) => void;
+  updateCartQuantity: (productId: string, quantity: number) => void;
+  clearCart: () => void;
+  toggleFavorite: (productId: string) => void;
+  isFavorite: (productId: string) => boolean;
+  addOrder: (order: Omit<Order, "id" | "date">) => Promise<boolean>;
+  fetchOrders: () => Promise<void>;
+  addCategory: (cat: string) => Promise<boolean>;
+  deleteCategory: (cat: string) => Promise<boolean>;
+  login: (userData: { name: string; email: string }, token: string) => void;
+  logout: () => void;
+  cartTotal: number;
+  cartCount: number;
+}
+
+const StoreContext = createContext<StoreContextType | null>(null);
+
+function loadFromStorage<T>(key: string, fallback: T): T {
+  try {
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+// Migration: if stored version doesn't match, reset categories & products to new branded defaults
+const STORE_VERSION = "v2";
+function migrateStorage() {
+  if (localStorage.getItem("bloom-version") !== STORE_VERSION) {
+    localStorage.setItem("bloom-categories", JSON.stringify([...DEFAULT_CATEGORIES]));
+    localStorage.setItem("bloom-products", JSON.stringify(defaultProducts));
+    localStorage.setItem("bloom-version", STORE_VERSION);
+  }
+}
+migrateStorage();
+
+export function StoreProvider({ children }: { children: React.ReactNode }) {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [user, setUser] = useState<{ name: string; email: string } | null>(() => loadFromStorage("user", null));
+  
+  const getCartKey = (u: any) => u ? `bloom-cart-${u.email}` : "bloom-cart-guest";
+  
+  const [cart, setCart] = useState<CartItem[]>(() => loadFromStorage(getCartKey(loadFromStorage("user", null)), []));
+  const [favorites, setFavorites] = useState<string[]>(() => loadFromStorage("bloom-favorites", []));
+  const [orders, setOrders] = useState<Order[]>(() => loadFromStorage("bloom-orders", []));
+  const [categories, setCategories] = useState<string[]>([]);
+
+  const fetchCategories = useCallback(async () => {
+    try {
+      const response = await fetch("http://localhost:5001/api/categories");
+      if (response.ok) {
+        const data = await response.json();
+        setCategories(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch categories:", error);
+    }
+  }, []);
+
+  const fetchProducts = useCallback(async () => {
+    try {
+      const response = await fetch("http://localhost:5001/api/products");
+      if (response.ok) {
+        const data = await response.json();
+        setProducts(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch products:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchProducts();
+    fetchCategories();
+  }, [fetchProducts, fetchCategories]);
+
+  useEffect(() => { localStorage.setItem(getCartKey(user), JSON.stringify(cart)); }, [cart, user]);
+  useEffect(() => { localStorage.setItem("bloom-favorites", JSON.stringify(favorites)); }, [favorites]);
+  useEffect(() => { localStorage.setItem("bloom-orders", JSON.stringify(orders)); }, [orders]);
+
+  const addProduct = useCallback(async (productData: Omit<Product, "id">) => {
+    const token = localStorage.getItem("token");
+    if (!token) return false;
+
+    try {
+      const response = await fetch("http://localhost:5001/api/products", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify(productData),
+      });
+
+      if (response.ok) {
+        const newProduct = await response.json();
+        setProducts(prev => [newProduct, ...prev]);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Failed to add product:", error);
+      return false;
+    }
+  }, []);
+
+  const updateProduct = useCallback(async (product: Product) => {
+    const token = localStorage.getItem("token");
+    if (!token) return false;
+
+    try {
+      const response = await fetch(`http://localhost:5001/api/products/${product.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify(product),
+      });
+
+      if (response.ok) {
+        const updatedProduct = await response.json();
+        setProducts(prev => prev.map(p => p.id === updatedProduct.id ? updatedProduct : p));
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Failed to update product:", error);
+      return false;
+    }
+  }, []);
+
+  const deleteProduct = useCallback(async (id: string) => {
+    const token = localStorage.getItem("token");
+    if (!token) return false;
+
+    try {
+      const response = await fetch(`http://localhost:5001/api/products/${id}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        },
+      });
+
+      if (response.ok) {
+        setProducts(prev => prev.filter(p => p.id !== id));
+        setCart(prev => prev.filter(item => item.product.id !== id));
+        setFavorites(prev => prev.filter(fId => fId !== id));
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Failed to delete product:", error);
+      return false;
+    }
+  }, []);
+
+  const addToCart = useCallback((product: Product) => {
+    setCart(prev => {
+      const existing = prev.find(item => item.product.id === product.id);
+      if (existing) return prev.map(item => item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
+      return [...prev, { product, quantity: 1 }];
+    });
+  }, []);
+
+  const removeFromCart = useCallback((productId: string) => {
+    setCart(prev => prev.filter(item => item.product.id !== productId));
+  }, []);
+
+  const updateCartQuantity = useCallback((productId: string, quantity: number) => {
+    if (quantity <= 0) { setCart(prev => prev.filter(item => item.product.id !== productId)); return; }
+    setCart(prev => prev.map(item => item.product.id === productId ? { ...item, quantity } : item));
+  }, []);
+
+  const clearCart = useCallback(() => setCart([]), []);
+
+  const toggleFavorite = useCallback((productId: string) => {
+    setFavorites(prev => prev.includes(productId) ? prev.filter(id => id !== productId) : [...prev, productId]);
+  }, []);
+
+  const isFavorite = useCallback((productId: string) => favorites.includes(productId), [favorites]);
+
+  const fetchOrders = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    try {
+      const response = await fetch("http://localhost:5001/api/orders", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setOrders(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch orders:", error);
+    }
+  }, []);
+
+  const addOrder = useCallback(async (orderData: Omit<Order, "id" | "date">) => {
+    const token = localStorage.getItem("token");
+    if (!token) return false;
+
+    try {
+      const response = await fetch("http://localhost:5001/api/orders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify(orderData),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const newOrder = { ...orderData, id: data.orderId, date: new Date().toISOString() };
+        setOrders(prev => [newOrder as Order, ...prev]);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Failed to place order:", error);
+      return false;
+    }
+  }, []);
+
+  const addCategory = useCallback(async (cat: string) => {
+    const token = localStorage.getItem("token");
+    if (!token) return false;
+
+    try {
+      const response = await fetch("http://localhost:5001/api/categories", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ name: cat }),
+      });
+
+      if (response.ok) {
+        setCategories(prev => [...prev, cat]);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Failed to add category:", error);
+      return false;
+    }
+  }, []);
+
+  const deleteCategory = useCallback(async (cat: string) => {
+    const token = localStorage.getItem("token");
+    if (!token) return false;
+
+    try {
+      const response = await fetch(`http://localhost:5001/api/categories/${encodeURIComponent(cat)}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        },
+      });
+
+      if (response.ok) {
+        setCategories(prev => prev.filter(c => c !== cat));
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Failed to delete category:", error);
+      return false;
+    }
+  }, []);
+
+  const login = useCallback((userData: { name: string; email: string }, token: string) => {
+    localStorage.setItem("token", token);
+    localStorage.setItem("user", JSON.stringify(userData));
+    setUser(userData);
+    // Load that user's cart
+    setCart(loadFromStorage(`bloom-cart-${userData.email}`, []));
+  }, []);
+
+  const logout = useCallback(() => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    setUser(null);
+    setOrders([]);
+    // Load guest cart or clear
+    setCart(loadFromStorage("bloom-cart-guest", []));
+  }, []);
+
+  const cartTotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+  return (
+    <StoreContext.Provider value={{ products, cart, favorites, orders, categories, user, addProduct, updateProduct, deleteProduct, addToCart, removeFromCart, updateCartQuantity, clearCart, toggleFavorite, isFavorite, addOrder, fetchOrders, addCategory, deleteCategory, login, logout, cartTotal, cartCount }}>
+      {children}
+    </StoreContext.Provider>
+  );
+}
+
+export function useStore() {
+  const context = useContext(StoreContext);
+  if (!context) throw new Error("useStore must be used within StoreProvider");
+  return context;
+}

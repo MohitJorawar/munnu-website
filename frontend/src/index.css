@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 35 30% 97%;
+    --foreground: 25 30% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 25 30% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 25 30% 12%;
+    --primary: 348 42% 62%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 35 25% 93%;
+    --secondary-foreground: 25 25% 20%;
+    --muted: 35 15% 93%;
+    --muted-foreground: 25 10% 45%;
+    --accent: 152 22% 86%;
+    --accent-foreground: 152 30% 18%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 35 18% 88%;
+    --input: 35 18% 88%;
+    --ring: 348 42% 62%;
+    --radius: 0.75rem;
+
+    --sidebar-background: 35 25% 96%;
+    --sidebar-foreground: 25 20% 25%;
+    --sidebar-primary: 348 42% 62%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 35 20% 92%;
+    --sidebar-accent-foreground: 25 25% 15%;
+    --sidebar-border: 35 15% 88%;
+    --sidebar-ring: 348 42% 62%;
+
+    /* Custom tokens */
+    --rose-light: 348 45% 92%;
+    --sage: 152 22% 76%;
+    --sage-light: 152 22% 92%;
+    --cream: 35 35% 95%;
+    --gold: 38 70% 55%;
+  }
+
+  .dark {
+    --background: 25 20% 8%;
+    --foreground: 35 20% 92%;
+    --card: 25 18% 12%;
+    --card-foreground: 35 20% 92%;
+    --popover: 25 18% 12%;
+    --popover-foreground: 35 20% 92%;
+    --primary: 348 42% 65%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 25 15% 18%;
+    --secondary-foreground: 35 20% 88%;
+    --muted: 25 12% 18%;
+    --muted-foreground: 25 10% 55%;
+    --accent: 152 18% 22%;
+    --accent-foreground: 152 22% 85%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 25 12% 20%;
+    --input: 25 12% 20%;
+    --ring: 348 42% 65%;
+    --sidebar-background: 25 18% 10%;
+    --sidebar-foreground: 35 15% 85%;
+    --sidebar-primary: 348 42% 65%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 25 12% 16%;
+    --sidebar-accent-foreground: 35 15% 85%;
+    --sidebar-border: 25 12% 18%;
+    --sidebar-ring: 348 42% 65%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+  }
+}
+
+@layer utilities {
+  .text-gradient-rose {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, hsl(348 42% 62%), hsl(348 55% 72%));
+  }
+}
