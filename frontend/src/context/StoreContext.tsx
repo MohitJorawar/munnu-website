@@ -3,6 +3,7 @@ import { Product, CartItem, Order } from "@/types/store";
 import { defaultProducts, DEFAULT_CATEGORIES } from "@/data/products";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001";
+console.log("🚀 StoreContext using API_URL:", API_URL);
 
 interface StoreContextType {
   products: Product[];
@@ -53,6 +54,7 @@ function migrateStorage() {
 migrateStorage();
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
+  // 1. All State Definitions
   const [products, setProducts] = useState<Product[]>([]);
   const [user, setUser] = useState<{ name: string; email: string } | null>(() => loadFromStorage("user", null));
   
@@ -63,6 +65,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [orders, setOrders] = useState<Order[]>(() => loadFromStorage("bloom-orders", []));
   const [categories, setCategories] = useState<string[]>([]);
 
+  // 2. All Data Fetching Functions
   const fetchCategories = useCallback(async () => {
     try {
       const response = await fetch(`${API_URL}/api/categories`);
@@ -87,16 +90,28 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  useEffect(() => {
-    fetchProducts();
-    fetchCategories();
-    fetchOrders(); // Load orders for the admin dashboard
-  }, [fetchProducts, fetchCategories, fetchOrders]);
+  const fetchOrders = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    const adminPin = localStorage.getItem("admin-pin");
+    if (!token && !adminPin) return;
 
-  useEffect(() => { localStorage.setItem(getCartKey(user), JSON.stringify(cart)); }, [cart, user]);
-  useEffect(() => { localStorage.setItem("bloom-favorites", JSON.stringify(favorites)); }, [favorites]);
-  useEffect(() => { localStorage.setItem("bloom-orders", JSON.stringify(orders)); }, [orders]);
+    try {
+      const response = await fetch(`${API_URL}/api/orders`, {
+        headers: { 
+          "Authorization": token ? `Bearer ${token}` : "",
+          "x-admin-pin": adminPin || ""
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setOrders(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch orders:", error);
+    }
+  }, []);
 
+  // 3. All Data Modifying Functions
   const addProduct = useCallback(async (productData: Omit<Product, "id">) => {
     const token = localStorage.getItem("token");
     const adminPin = localStorage.getItem("admin-pin");
@@ -180,79 +195,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const addToCart = useCallback((product: Product) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.product.id === product.id);
-      if (existing) return prev.map(item => item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
-      return [...prev, { product, quantity: 1 }];
-    });
-  }, []);
-
-  const removeFromCart = useCallback((productId: string) => {
-    setCart(prev => prev.filter(item => item.product.id !== productId));
-  }, []);
-
-  const updateCartQuantity = useCallback((productId: string, quantity: number) => {
-    if (quantity <= 0) { setCart(prev => prev.filter(item => item.product.id !== productId)); return; }
-    setCart(prev => prev.map(item => item.product.id === productId ? { ...item, quantity } : item));
-  }, []);
-
-  const clearCart = useCallback(() => setCart([]), []);
-
-  const toggleFavorite = useCallback((productId: string) => {
-    setFavorites(prev => prev.includes(productId) ? prev.filter(id => id !== productId) : [...prev, productId]);
-  }, []);
-
-  const isFavorite = useCallback((productId: string) => favorites.includes(productId), [favorites]);
-
-  const fetchOrders = useCallback(async () => {
-    const token = localStorage.getItem("token");
-    const adminPin = localStorage.getItem("admin-pin");
-    if (!token && !adminPin) return;
-
-    try {
-      const response = await fetch(`${API_URL}/api/orders`, {
-        headers: { 
-          "Authorization": token ? `Bearer ${token}` : "",
-          "x-admin-pin": adminPin || ""
-        }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setOrders(data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch orders:", error);
-    }
-  }, []);
-
-  const addOrder = useCallback(async (orderData: Omit<Order, "id" | "date">) => {
-    const token = localStorage.getItem("token");
-    if (!token) return false;
-
-    try {
-      const response = await fetch(`${API_URL}/api/orders`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify(orderData),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const newOrder = { ...orderData, id: data.orderId, date: new Date().toISOString() };
-        setOrders(prev => [newOrder as Order, ...prev]);
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error("Failed to place order:", error);
-      return false;
-    }
-  }, []);
-
   const addCategory = useCallback(async (cat: string) => {
     const token = localStorage.getItem("token");
     const adminPin = localStorage.getItem("admin-pin");
@@ -305,35 +247,105 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // 4. Cart and Other Utility Functions
+  const addToCart = useCallback((product: Product) => {
+    setCart(prev => {
+      const existing = prev.find(item => item.product.id === product.id);
+      if (existing) return prev.map(item => item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
+      return [...prev, { product, quantity: 1 }];
+    });
+  }, []);
+
+  const removeFromCart = useCallback((productId: string) => {
+    setCart(prev => prev.filter(item => item.product.id !== productId));
+  }, []);
+
+  const updateCartQuantity = useCallback((productId: string, quantity: number) => {
+    if (quantity <= 0) { setCart(prev => prev.filter(item => item.product.id !== productId)); return; }
+    setCart(prev => prev.map(item => item.product.id === productId ? { ...item, quantity } : item));
+  }, []);
+
+  const clearCart = useCallback(() => setCart([]), []);
+
+  const toggleFavorite = useCallback((productId: string) => {
+    setFavorites(prev => prev.includes(productId) ? prev.filter(id => id !== productId) : [...prev, productId]);
+  }, []);
+
+  const isFavorite = useCallback((productId: string) => favorites.includes(productId), [favorites]);
+
+  const addOrder = useCallback(async (orderData: Omit<Order, "id" | "date">) => {
+    const token = localStorage.getItem("token");
+    if (!token) return false;
+
+    try {
+      const response = await fetch(`${API_URL}/api/orders`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify(orderData),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const newOrder = { ...orderData, id: data.orderId, date: new Date().toISOString() };
+        setOrders(prev => [newOrder as Order, ...prev]);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Failed to place order:", error);
+      return false;
+    }
+  }, []);
+
   const login = useCallback((userData: { name: string; email: string }, token: string) => {
     localStorage.setItem("token", token);
     localStorage.setItem("user", JSON.stringify(userData));
     setUser(userData);
-    // Load that user's cart
     setCart(loadFromStorage(`bloom-cart-${userData.email}`, []));
   }, []);
 
   const logout = useCallback(() => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    localStorage.removeItem("admin-pin"); // Clear admin pin on logout
     setUser(null);
     setOrders([]);
-    // Load guest cart or clear
     setCart(loadFromStorage("bloom-cart-guest", []));
   }, []);
 
   const cartTotal = cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
+  // 5. All Side Effects (Bottom)
+  useEffect(() => {
+    fetchProducts();
+    fetchCategories();
+    fetchOrders(); 
+  }, [fetchProducts, fetchCategories, fetchOrders]);
+
+  useEffect(() => { localStorage.setItem(getCartKey(user), JSON.stringify(cart)); }, [cart, user]);
+  useEffect(() => { localStorage.setItem("bloom-favorites", JSON.stringify(favorites)); }, [favorites]);
+  useEffect(() => { localStorage.setItem("bloom-orders", JSON.stringify(orders)); }, [orders]);
+
   return (
-    <StoreContext.Provider value={{ products, cart, favorites, orders, categories, user, addProduct, updateProduct, deleteProduct, addToCart, removeFromCart, updateCartQuantity, clearCart, toggleFavorite, isFavorite, addOrder, fetchOrders, addCategory, deleteCategory, login, logout, cartTotal, cartCount }}>
+    <StoreContext.Provider value={{
+      products, cart, favorites, orders, categories, user,
+      addProduct, updateProduct, deleteProduct,
+      addToCart, removeFromCart, updateCartQuantity, clearCart,
+      toggleFavorite, isFavorite, addOrder, fetchOrders,
+      addCategory, deleteCategory, login, logout,
+      cartTotal, cartCount
+    }}>
       {children}
     </StoreContext.Provider>
   );
 }
 
-export function useStore() {
+export const useStore = () => {
   const context = useContext(StoreContext);
-  if (!context) throw new Error("useStore must be used within StoreProvider");
+  if (!context) throw new Error("useStore must be used within a StoreProvider");
   return context;
 }
