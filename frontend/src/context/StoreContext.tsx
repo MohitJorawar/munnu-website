@@ -3,7 +3,32 @@ import { Product, CartItem, Order } from "@/types/store";
 import { defaultProducts, DEFAULT_CATEGORIES } from "@/data/products";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001";
-console.log("🚀 StoreContext using API_URL:", API_URL);
+
+// Helper: Get cart key for a specific user
+const getCartKey = (u: any) => u && u.email ? `bloom-cart-${u.email}` : "bloom-cart-guest";
+
+function loadFromStorage<T>(key: string, fallback: T): T {
+  try {
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+// Migration: if stored version doesn't match, reset categories & products
+const STORE_VERSION = "v2.1";
+function migrateStorage() {
+  try {
+    if (localStorage.getItem("bloom-version") !== STORE_VERSION) {
+      localStorage.setItem("bloom-categories", JSON.stringify([...DEFAULT_CATEGORIES]));
+      localStorage.setItem("bloom-products", JSON.stringify(defaultProducts));
+      localStorage.setItem("bloom-version", STORE_VERSION);
+    }
+  } catch (e) {
+    console.error("Migration failed", e);
+  }
+}
 
 interface StoreContextType {
   products: Product[];
@@ -33,34 +58,17 @@ interface StoreContextType {
 
 const StoreContext = createContext<StoreContextType | null>(null);
 
-function loadFromStorage<T>(key: string, fallback: T): T {
-  try {
-    const stored = localStorage.getItem(key);
-    return stored ? JSON.parse(stored) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-// Migration: if stored version doesn't match, reset categories & products to new branded defaults
-const STORE_VERSION = "v2";
-function migrateStorage() {
-  if (localStorage.getItem("bloom-version") !== STORE_VERSION) {
-    localStorage.setItem("bloom-categories", JSON.stringify([...DEFAULT_CATEGORIES]));
-    localStorage.setItem("bloom-products", JSON.stringify(defaultProducts));
-    localStorage.setItem("bloom-version", STORE_VERSION);
-  }
-}
-migrateStorage();
-
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   // 1. All State Definitions
   const [products, setProducts] = useState<Product[]>([]);
   const [user, setUser] = useState<{ name: string; email: string } | null>(() => loadFromStorage("user", null));
   
-  const getCartKey = (u: any) => u ? `bloom-cart-${u.email}` : "bloom-cart-guest";
+  // Use a safer initialization for cart
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    const currentUser = loadFromStorage("user", null);
+    return loadFromStorage(getCartKey(currentUser), []);
+  });
   
-  const [cart, setCart] = useState<CartItem[]>(() => loadFromStorage(getCartKey(loadFromStorage("user", null)), []));
   const [favorites, setFavorites] = useState<string[]>(() => loadFromStorage("bloom-favorites", []));
   const [orders, setOrders] = useState<Order[]>(() => loadFromStorage("bloom-orders", []));
   const [categories, setCategories] = useState<string[]>([]);
@@ -310,7 +318,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(() => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    localStorage.removeItem("admin-pin"); // Clear admin pin on logout
+    localStorage.removeItem("admin-pin");
     setUser(null);
     setOrders([]);
     setCart(loadFromStorage("bloom-cart-guest", []));
@@ -321,6 +329,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   // 5. All Side Effects (Bottom)
   useEffect(() => {
+    migrateStorage(); // Run migration once on mount
+    console.log("🚀 StoreContext using API_URL:", API_URL);
     fetchProducts();
     fetchCategories();
     fetchOrders(); 
