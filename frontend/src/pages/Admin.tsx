@@ -68,6 +68,7 @@ const Admin = () => {
             e.preventDefault();
             if (pin === ADMIN_PIN) {
               setAuthenticated(true);
+              localStorage.setItem("admin-pin", pin); // Save for API calls
               toast.success("Welcome, Admin!");
             } else {
               toast.error("Incorrect PIN");

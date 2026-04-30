@@ -59,6 +59,8 @@ app.use(cors({
     return callback(null, true); // Allow all for now; tighten later if needed
   },
   credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-pin'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }));
 app.use(express.json());
 

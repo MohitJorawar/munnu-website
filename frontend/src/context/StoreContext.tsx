@@ -90,7 +90,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     fetchProducts();
     fetchCategories();
-  }, [fetchProducts, fetchCategories]);
+    fetchOrders(); // Load orders for the admin dashboard
+  }, [fetchProducts, fetchCategories, fetchOrders]);
 
   useEffect(() => { localStorage.setItem(getCartKey(user), JSON.stringify(cart)); }, [cart, user]);
   useEffect(() => { localStorage.setItem("bloom-favorites", JSON.stringify(favorites)); }, [favorites]);
@@ -98,14 +99,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const addProduct = useCallback(async (productData: Omit<Product, "id">) => {
     const token = localStorage.getItem("token");
-    if (!token) return false;
+    const adminPin = localStorage.getItem("admin-pin");
+    if (!token && !adminPin) return false;
 
     try {
       const response = await fetch(`${API_URL}/api/products`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
+          "Authorization": token ? `Bearer ${token}` : "",
+          "x-admin-pin": adminPin || ""
         },
         body: JSON.stringify(productData),
       });
@@ -124,14 +127,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const updateProduct = useCallback(async (product: Product) => {
     const token = localStorage.getItem("token");
-    if (!token) return false;
+    const adminPin = localStorage.getItem("admin-pin");
+    if (!token && !adminPin) return false;
 
     try {
       const response = await fetch(`${API_URL}/api/products/${product.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
+          "Authorization": token ? `Bearer ${token}` : "",
+          "x-admin-pin": adminPin || ""
         },
         body: JSON.stringify(product),
       });
@@ -150,13 +155,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const deleteProduct = useCallback(async (id: string) => {
     const token = localStorage.getItem("token");
-    if (!token) return false;
+    const adminPin = localStorage.getItem("admin-pin");
+    if (!token && !adminPin) return false;
 
     try {
       const response = await fetch(`${API_URL}/api/products/${id}`, {
         method: "DELETE",
         headers: {
-          "Authorization": `Bearer ${token}`
+          "Authorization": token ? `Bearer ${token}` : "",
+          "x-admin-pin": adminPin || ""
         },
       });
 
@@ -200,11 +207,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const fetchOrders = useCallback(async () => {
     const token = localStorage.getItem("token");
-    if (!token) return;
+    const adminPin = localStorage.getItem("admin-pin");
+    if (!token && !adminPin) return;
 
     try {
       const response = await fetch(`${API_URL}/api/orders`, {
-        headers: { "Authorization": `Bearer ${token}` }
+        headers: { 
+          "Authorization": token ? `Bearer ${token}` : "",
+          "x-admin-pin": adminPin || ""
+        }
       });
       if (response.ok) {
         const data = await response.json();
@@ -244,14 +255,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const addCategory = useCallback(async (cat: string) => {
     const token = localStorage.getItem("token");
-    if (!token) return false;
+    const adminPin = localStorage.getItem("admin-pin");
+    if (!token && !adminPin) return false;
 
     try {
       const response = await fetch(`${API_URL}/api/categories`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
+          "Authorization": token ? `Bearer ${token}` : "",
+          "x-admin-pin": adminPin || ""
         },
         body: JSON.stringify({ name: cat }),
       });
@@ -269,13 +282,15 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const deleteCategory = useCallback(async (cat: string) => {
     const token = localStorage.getItem("token");
-    if (!token) return false;
+    const adminPin = localStorage.getItem("admin-pin");
+    if (!token && !adminPin) return false;
 
     try {
       const response = await fetch(`${API_URL}/api/categories/${encodeURIComponent(cat)}`, {
         method: "DELETE",
         headers: {
-          "Authorization": `Bearer ${token}`
+          "Authorization": token ? `Bearer ${token}` : "",
+          "x-admin-pin": adminPin || ""
         },
       });
 
