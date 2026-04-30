@@ -12,43 +12,56 @@ const __dirname = path.dirname(__filename);
 const { Client } = pg;
 
 async function setup() {
-  // Connection config for the default 'postgres' database
+  // Connection config for the default database
+  // For Supabase, DB_NAME is already 'postgres', so we connect directly
+  const dbName = process.env.DB_NAME || 'handi_chic';
+  const isSupabase = (process.env.DB_HOST || '').includes('supabase');
+  const sslConfig = process.env.DB_SSL === 'false' ? false : { rejectUnauthorized: false };
+
   const client = new Client({
     user: process.env.DB_USER || 'postgres',
     host: process.env.DB_HOST || 'localhost',
     password: process.env.DB_PASSWORD,
     port: process.env.DB_PORT || 5432,
-    database: 'postgres', // Connect to default db first
+    database: isSupabase ? dbName : 'postgres', // Supabase: connect directly; Local: connect to default db first
+    ssl: sslConfig,
   });
 
   try {
     await client.connect();
     console.log('Connected to PostgreSQL...');
 
-    // 1. Create the database if it doesn't exist
-    const dbName = process.env.DB_NAME || 'handi_chic';
-    const res = await client.query(`SELECT 1 FROM pg_database WHERE datname = '${dbName}'`);
-    
-    if (res.rowCount === 0) {
-      console.log(`Creating database "${dbName}"...`);
-      await client.query(`CREATE DATABASE ${dbName}`);
+    // 1. Create the database if it doesn't exist (skip for Supabase — database is pre-created)
+    if (isSupabase) {
+      console.log(`Using Supabase database "${dbName}" (skipping CREATE DATABASE)...`);
     } else {
-      console.log(`Database "${dbName}" already exists.`);
+      const res = await client.query(`SELECT 1 FROM pg_database WHERE datname = '${dbName}'`);
+      
+      if (res.rowCount === 0) {
+        console.log(`Creating database "${dbName}"...`);
+        await client.query(`CREATE DATABASE ${dbName}`);
+      } else {
+        console.log(`Database "${dbName}" already exists.`);
+      }
     }
 
-    await client.end();
-
-
-    // 2. Connect to the new database to create the table
-    const dbClient = new Client({
-      user: process.env.DB_USER || 'postgres',
-      host: process.env.DB_HOST || 'localhost',
-      password: process.env.DB_PASSWORD,
-      port: process.env.DB_PORT || 5432,
-      database: dbName,
-    });
-
-    await dbClient.connect();
+    // 2. Connect to the target database to create tables
+    // For Supabase we can reuse the same connection since we're already connected to the right DB
+    let dbClient;
+    if (isSupabase) {
+      dbClient = client; // Already connected to the right database
+    } else {
+      await client.end();
+      dbClient = new Client({
+        user: process.env.DB_USER || 'postgres',
+        host: process.env.DB_HOST || 'localhost',
+        password: process.env.DB_PASSWORD,
+        port: process.env.DB_PORT || 5432,
+        database: dbName,
+        ssl: sslConfig,
+      });
+      await dbClient.connect();
+    }
 
     // Create products table
     await dbClient.query(`

@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { Product, CartItem, Order } from "@/types/store";
 import { defaultProducts, DEFAULT_CATEGORIES } from "@/data/products";
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5001";
+
 interface StoreContextType {
   products: Product[];
   cart: CartItem[];
@@ -63,7 +65,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const fetchCategories = useCallback(async () => {
     try {
-      const response = await fetch("http://localhost:5001/api/categories");
+      const response = await fetch(`${API_URL}/api/categories`);
       if (response.ok) {
         const data = await response.json();
         setCategories(data);
@@ -75,7 +77,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   const fetchProducts = useCallback(async () => {
     try {
-      const response = await fetch("http://localhost:5001/api/products");
+      const response = await fetch(`${API_URL}/api/products`);
       if (response.ok) {
         const data = await response.json();
         setProducts(data);
@@ -99,7 +101,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (!token) return false;
 
     try {
-      const response = await fetch("http://localhost:5001/api/products", {
+      const response = await fetch(`${API_URL}/api/products`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -125,7 +127,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (!token) return false;
 
     try {
-      const response = await fetch(`http://localhost:5001/api/products/${product.id}`, {
+      const response = await fetch(`${API_URL}/api/products/${product.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -151,7 +153,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (!token) return false;
 
     try {
-      const response = await fetch(`http://localhost:5001/api/products/${id}`, {
+      const response = await fetch(`${API_URL}/api/products/${id}`, {
         method: "DELETE",
         headers: {
           "Authorization": `Bearer ${token}`
@@ -201,7 +203,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (!token) return;
 
     try {
-      const response = await fetch("http://localhost:5001/api/orders", {
+      const response = await fetch(`${API_URL}/api/orders`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
       if (response.ok) {
@@ -218,7 +220,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (!token) return false;
 
     try {
-      const response = await fetch("http://localhost:5001/api/orders", {
+      const response = await fetch(`${API_URL}/api/orders`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -245,7 +247,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (!token) return false;
 
     try {
-      const response = await fetch("http://localhost:5001/api/categories", {
+      const response = await fetch(`${API_URL}/api/categories`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -270,7 +272,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     if (!token) return false;
 
     try {
-      const response = await fetch(`http://localhost:5001/api/categories/${encodeURIComponent(cat)}`, {
+      const response = await fetch(`${API_URL}/api/categories/${encodeURIComponent(cat)}`, {
         method: "DELETE",
         headers: {
           "Authorization": `Bearer ${token}`
